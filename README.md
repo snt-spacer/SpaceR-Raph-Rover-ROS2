@@ -31,7 +31,10 @@ Specifications, connections and additional hardware: [docs/hardware.md](docs/har
 
 ## Digital twin in MARE
 
-![The Raph Rover's digital twin on lunar terrain in the MARE simulator](docs/images/raph_mare_sim.jpg)
+<p align="center">
+  <img src="docs/images/raph_mare_sim.jpg" width="420" alt="The Raph Rover's digital twin on lunar terrain in the MARE simulator">
+  <img src="docs/images/raph_mare_orbit.gif" width="420" alt="Orbit around the Raph Rover's digital twin in MARE">
+</p>
 
 The rover has a digital twin in [MARE](https://github.com/raulcastar/MARE-Lunar-Simulator),
 SpaceR's open-source lunar rover simulator in Unreal Engine 5. The twin carries the same
