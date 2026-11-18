@@ -1,0 +1,23 @@
+# Local tooling
+.claude/
+
+# Runtime logs
+logs/
+
+# Teledyne FLIR Spinnaker SDK: proprietary, not redistributable.
+# Download it yourself and place it here (see SPINNAKER_SDK.md in each folder).
+component-bumblebee_*/library/*
+!component-bumblebee_*/library/SPINNAKER_SDK.md
+
+# Kernel module build output (CH341SER driver)
+*.ko
+*.o
+*.mod
+*.mod.c
+.*.cmd
+modules.order
+Module.symvers
+
+# Python
+__pycache__/
+*.pyc

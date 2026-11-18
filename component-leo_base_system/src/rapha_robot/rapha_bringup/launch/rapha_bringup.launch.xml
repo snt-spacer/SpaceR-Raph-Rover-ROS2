@@ -1,0 +1,32 @@
+<launch version="0.1.1">
+
+  <arg name="spawn_state_publisher"
+    default="true"
+    description="Whether to start the robot_state_publisher node" />
+
+  <arg name="model"
+    default="$(find-pkg-share rapha_description)/urdf/robot.urdf.xacro"
+    description="Absolute path to robot urdf.xacro file" />
+
+  <arg name="tf_frame_prefix"
+    default=""
+    description="The prefix added to each published TF frame id" />
+
+  <include if="$(var spawn_state_publisher)"
+    file="$(find-pkg-share rapha_description)/launch/state_publisher.launch.xml">
+    <arg name="model" value="$(var model)" />
+  </include>
+
+
+  <node pkg="rapha_bringup" exec="rapha_system" />
+
+  <!-- NOTE: oak.launch.xml removed. It loaded the OAK as a composable node in an
+       isolated container, which fails on this image with "Could not find requested
+       resource in ament index" (a depthai-ros ComposableNodeContainer bug), so it
+       only ever produced error spam. The OAK runs as a standalone node in its own
+       component-oak_camera container (node 'loccam', topics /loccam/*). -->
+
+  <!-- NOTE: teleop moved out of this launch into its own component-teleop
+       container (joy_linux_node + rapha_teleop). It publishes the same
+       AckermannDrive commands over Zenoh, so the base controller is unaffected. -->
+</launch>

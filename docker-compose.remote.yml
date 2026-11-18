@@ -1,0 +1,76 @@
+# docker-compose.remote.yml
+#
+# OPERATOR stack — runs on the remote computer (a laptop on the rover network),
+# NOT on the Jetson. Provides gamepad teleop and the debug CLI / RViz. The robot
+# itself runs docker-compose.robot.yml.
+#
+# Unlike the robot's containers (which reach the router over localhost), these
+# must be told where the router lives: config/zenoh_session.json5 is a
+# mode:client config that connects to the robot at tcp/10.10.0.15:7447, wired in
+# via ZENOH_SESSION_CONFIG_URI. If the robot's IP differs, edit that file (and
+# the ZENOH_ROUTER value below, used only for the startup reachability wait).
+#
+# Requirements on the operator machine: Linux with Docker, the gamepad plugged
+# in (/dev/input/js0), and a local X server for RViz.
+#
+#   ./docker_build_remote.sh         # build + up -d
+#   docker compose -f docker-compose.remote.yml up -d
+#   # then, for RViz / topics:  docker exec -it <project>-debug_cli-1 bash
+
+services:
+  # Gamepad teleop -> /controller/cmd_ackermann (relayed to the robot's MCU).
+  component-teleop:
+    build:
+      context: ./component-teleop
+      dockerfile: Dockerfile
+    image: leo_raph/component-teleop:dev
+    network_mode: host
+    ipc: host
+    restart: unless-stopped
+    entrypoint: >
+      bash -lc "/entrypoint.sh"
+    devices:
+      - /dev/input/:/dev/input/
+    volumes:
+      - /dev/input/:/dev/input/
+      - /run/udev:/run/udev:ro
+      # Zenoh client config: connect to the robot's router (see file header).
+      - ./config/zenoh_session.json5:/config/zenoh_session.json5:ro
+    privileged: true
+    environment:
+      JOY_DEV: /dev/input/js0
+      RCUTILS_COLORIZED_OUTPUT: 1
+      RMW_IMPLEMENTATION: rmw_zenoh_cpp
+      ZENOH_ROUTER: tcp/10.10.0.15:7447
+      ZENOH_SESSION_CONFIG_URI: /config/zenoh_session.json5
+      ROS_DOMAIN_ID: 0
+
+  # Interactive ROS 2 CLI + RViz (launch with the baked-in `rover-rviz` alias).
+  debug_cli:
+    build:
+      context: .
+      dockerfile: docker/debug_cli.Dockerfile
+    image: leo_raph/debug_cli:dev
+    network_mode: host
+    ipc: host
+    entrypoint: ["/bin/bash", "-c", "source /opt/ros/jazzy/setup.bash && exec /bin/bash"]
+    privileged: true
+    stdin_open: true
+    tty: true
+    environment:
+      ROS_DOMAIN_ID: 0
+      ROBOT_NAMESPACE: ""
+      LAUNCH_ARGS: ""
+      RMW_IMPLEMENTATION: rmw_zenoh_cpp
+      ZENOH_ROUTER: tcp/10.10.0.15:7447
+      ZENOH_SESSION_CONFIG_URI: /config/zenoh_session.json5
+      RCUTILS_COLORIZED_OUTPUT: 1
+      DISPLAY: ${DISPLAY}
+      QT_X11_NO_MITSHM: 1
+      XAUTHORITY: /root/.Xauthority
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${HOME}/.Xauthority:/root/.Xauthority:ro
+      - ./config/zenoh_session.json5:/config/zenoh_session.json5:ro
+      # RViz profile; launch inside with:  rover-rviz
+      - ./docker/rover_debug.rviz:/root/rover_debug.rviz:ro

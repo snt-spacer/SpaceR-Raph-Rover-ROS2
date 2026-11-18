@@ -1,0 +1,8 @@
+# Keep the build context small for repo-root builds (debug_cli, controller_relay).
+**/build/
+**/install/
+**/log/
+**/__pycache__/
+**/*.pyc
+.git/
+logs/

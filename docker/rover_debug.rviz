@@ -1,0 +1,201 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+    Property Tree Widget:
+      Expanded:
+        - /Global Options1
+        - /TF1
+        - /Lidar (livox)1
+        - /LocCam cloud1
+      Splitter Ratio: 0.5
+  - Class: rviz_common/Views
+    Name: Views
+  - Class: rviz_common/Selection
+    Name: Selection
+Visualization Manager:
+  Class: ""
+  Name: root
+  Global Options:
+    Background Color: 48; 48; 48
+    Fixed Frame: odom
+    Frame Rate: 30
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Enabled: true
+      Cell Size: 1
+      Plane Cell Count: 20
+      Color: 160; 160; 164
+      Reference Frame: <Fixed Frame>
+
+    - Class: rviz_default_plugins/TF
+      Name: TF
+      Enabled: true
+      Show Names: true
+      Show Axes: true
+      Show Arrows: false
+      Marker Scale: 0.3
+      Update Interval: 0
+
+    - Class: rviz_default_plugins/RobotModel
+      Name: RobotModel
+      Enabled: true
+      Description Source: Topic
+      Description Topic:
+        Value: /robot_description
+        Depth: 5
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+      Visual Enabled: true
+
+    - Class: rviz_default_plugins/Odometry
+      Name: Odometry (/controller/odom)
+      Enabled: true
+      Topic:
+        Value: /controller/odom
+        Depth: 10
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+      Keep: 100
+      Position Tolerance: 0.05
+      Angle Tolerance: 0.05
+      Shape:
+        Value: Arrow
+        Color: 255; 85; 0
+        Alpha: 1
+        Shaft Length: 0.3
+        Shaft Radius: 0.03
+        Head Length: 0.1
+        Head Radius: 0.06
+
+    - Class: rviz_default_plugins/PointCloud2
+      Name: Lidar (livox)
+      Enabled: false
+      Topic:
+        Value: /lidar/points
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: System Default
+      Style: Points
+      Size (Pixels): 2
+      Color Transformer: AxisColor
+      Axis: Z
+      Decay Time: 0
+
+    - Class: rviz_default_plugins/PointCloud2
+      Name: LocCam cloud (/loccam/points)
+      Enabled: false
+      Topic:
+        Value: /loccam/points
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: System Default
+      Style: Points
+      Size (Pixels): 2
+      Color Transformer: RGB8
+      Decay Time: 0
+
+    - Class: rviz_default_plugins/PointCloud2
+      Name: NavCam cloud (/navcam/points)
+      Enabled: false
+      Topic:
+        Value: /navcam/points
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: System Default
+      Style: Points
+      Size (Pixels): 2
+      Color Transformer: RGB8
+      Decay Time: 0
+
+    - Class: rviz_default_plugins/PointCloud2
+      Name: Lidar voxel (/lidar/points_filtered)
+      Enabled: true
+      Topic:
+        Value: /lidar/points_filtered
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+      Style: Boxes
+      Size (m): 0.01
+      Color Transformer: AxisColor
+      Axis: Z
+      Decay Time: 0
+
+    - Class: rviz_default_plugins/PointCloud2
+      Name: LocCam voxel (/loccam/points_filtered)
+      Enabled: true
+      Topic:
+        Value: /loccam/points_filtered
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+      Style: Boxes
+      Size (m): 0.01
+      Color Transformer: RGB8
+      Decay Time: 0
+
+    - Class: rviz_default_plugins/PointCloud2
+      Name: NavCam voxel (/navcam/points_filtered)
+      Enabled: false
+      Topic:
+        Value: /navcam/points_filtered
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+      Style: Boxes
+      Size (m): 0.01
+      Color Transformer: RGB8
+      Decay Time: 0
+
+    - Class: rviz_default_plugins/Image
+      Name: NavCam left (/navcam/left/image_rect)
+      Enabled: true
+      Topic:
+        Value: /navcam/left/image_rect
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: System Default
+
+    - Class: rviz_default_plugins/Image
+      Name: LocCam RGB (/loccam/rgb/image_rect)
+      Enabled: true
+      Topic:
+        Value: /loccam/rgb/image_rect
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: System Default
+  Tools:
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/FocusCamera
+    - Class: rviz_default_plugins/Measure
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Name: Current View
+      Distance: 6
+      Pitch: 0.4
+      Yaw: 2.35
+      Focal Point:
+        X: 0
+        Y: 0
+        Z: 0
+      Target Frame: <Fixed Frame>
+Window Geometry:
+  Height: 900
+  Width: 1500
+  Displays:
+    collapsed: false
+  Views:
+    collapsed: false

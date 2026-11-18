@@ -1,0 +1,240 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ackermann-steered Raph rover description.
+     Ported from RaphRover/raph_common (raph_description/urdf/raph_macros.xacro):
+     macro `raph` -> `rapha` and package `raph_description` -> `rapha_description`
+     so the existing robot.urdf.xacro / launch keep working unchanged.
+     Kinematics (from the upstream Gazebo steering plugin): wheelbase 0.378 m,
+     track 0.384 m, wheel radius 0.08 m. wheel_rl/wheel_rr are steered by
+     servo_l/servo_r; wheel_fl/wheel_fr are fixed. -->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:include filename="$(find rapha_description)/urdf/include/oak_macro.xacro"/>
+  <xacro:include filename="$(find rapha_description)/urdf/include/laser_macro.xacro"/>
+
+  <xacro:macro name="rapha"
+               params="footprint_link:=true
+                       link_prefix:=''
+                       joint_prefix:=''
+                       imu_translation:='-0.128 0 -0.0393'">
+    <!--TODO specify accurate imu translation-->
+
+    <xacro:loccam_camera parent="${link_prefix}base_link" base_frame="loccam_base_frame" namespace="${link_prefix}">
+      <origin xyz="-0.05642 0.0 -0.076218" rpy="0 0 0" />
+    </xacro:loccam_camera>
+
+    <xacro:rplidar_s3 parent="${link_prefix}base_link" namespace="${link_prefix}">
+      <origin xyz="-0.062106 0.0 0.011588" />
+    </xacro:rplidar_s3>
+
+    <!-- ===================== Livox HAP lidar ===================== -->
+    <!-- /lidar/points + /lidar/imu are published in 'lidar_frame'. Mounted at
+         the same base_link pose as laser_frame (see the rplidar_s3 call above). -->
+    <link name="${link_prefix}lidar_frame"/>
+    <joint name="${joint_prefix}lidar_joint" type="fixed">
+      <origin xyz="-0.062106 0.0 0.011588" rpy="0 0 0"/>
+      <parent link="${link_prefix}base_link"/>
+      <child link="${link_prefix}lidar_frame"/>
+    </joint>
+
+    <!-- ============== Bumblebee X stereo navigation camera ============== -->
+    <!-- navcam sits above the lidar at z = 0.35 m. The stereo BASELINE MIDPOINT
+         is centered on the lidar base_link x,y (-0.062106, 0.0). navcam_link is
+         the LEFT camera, so it is offset +half-baseline (+0.12 in y); the right
+         camera (navcam_link - 0.24 y) then lands at -0.12, so the pair straddles
+         y=0. navcam_optical_frame is the left REP-103 optical frame (z-fwd,
+         x-right, y-down), the reference for /navcam depth/disparity/points/left. -->
+    <link name="${link_prefix}navcam_link"/>
+    <joint name="${joint_prefix}navcam_joint" type="fixed">
+      <origin xyz="-0.062106 0.12 0.35" rpy="0 0 0"/>
+      <parent link="${link_prefix}base_link"/>
+      <child link="${link_prefix}navcam_link"/>
+    </joint>
+
+    <link name="${link_prefix}navcam_optical_frame"/>
+    <joint name="${joint_prefix}navcam_optical_joint" type="fixed">
+      <origin xyz="0 0 0" rpy="-${pi/2} 0 -${pi/2}"/>
+      <parent link="${link_prefix}navcam_link"/>
+      <child link="${link_prefix}navcam_optical_frame"/>
+    </joint>
+
+    <link name="${link_prefix}navcam_right_link"/>
+    <joint name="${joint_prefix}navcam_right_joint" type="fixed">
+      <origin xyz="0 -0.24 0" rpy="0 0 0"/>
+      <parent link="${link_prefix}navcam_link"/>
+      <child link="${link_prefix}navcam_right_link"/>
+    </joint>
+
+    <link name="${link_prefix}navcam_right_optical_frame"/>
+    <joint name="${joint_prefix}navcam_right_optical_joint" type="fixed">
+      <origin xyz="0 0 0" rpy="-${pi/2} 0 -${pi/2}"/>
+      <parent link="${link_prefix}navcam_right_link"/>
+      <child link="${link_prefix}navcam_right_optical_frame"/>
+    </joint>
+
+    <xacro:macro name="servo_link" params="name">
+      <link name="${link_prefix}servo_${name}_link">
+        <inertial>
+          <mass value="0.055"/>
+          <origin xyz="0 0 0"/>
+          <inertia
+            ixx="0.000001" ixy="0.0" ixz="0.0"
+            iyy="0.000001" iyz="0.0"
+            izz="0.000001"/>
+        </inertial>
+        <visual>
+          <origin xyz="0 0 0" rpy="0 0 ${pi/2}"/>
+          <geometry>
+            <mesh filename="package://rapha_description/models/servo.dae"/>
+          </geometry>
+        </visual>
+        <collision>
+          <origin xyz="0 0 0" rpy="0 0 0"/>
+          <geometry>
+            <mesh filename="package://rapha_description/models/servo_outline.stl"/>
+          </geometry>
+        </collision>
+      </link>
+    </xacro:macro>
+
+    <xacro:macro name="wheel_link" params="name">
+      <link name="${link_prefix}wheel_${name}_link">
+        <inertial>
+          <mass value="0.5"/>
+          <origin xyz="0 0 0"/>
+          <inertia
+            ixx="0.002079" ixy="0.0" ixz="0.0"
+            iyy="0.002079" iyz="0.0"
+            izz="0.004158"/>
+        </inertial>
+        <visual>
+          <origin xyz="0 0 0" rpy="0 0 ${pi/2}"/>
+          <geometry>
+            <mesh filename="package://rapha_description/models/wheel.dae"/>
+          </geometry>
+        </visual>
+        <collision>
+          <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+          <geometry>
+            <cylinder radius="0.091" length="0.088"/>
+          </geometry>
+        </collision>
+      </link>
+    </xacro:macro>
+
+    <!-- LINKS -->
+    <xacro:if value="${footprint_link}">
+      <link name="${link_prefix}base_footprint"/>
+    </xacro:if>
+
+    <link name="${link_prefix}base_link">
+      <inertial>
+        <mass value="3.0"/>
+        <origin xyz="-0.019662 0.011643 -0.031802"/>
+        <inertia
+          ixx="0.02" ixy="0.001177" ixz="-0.0008871"
+          iyy="0.02" iyz="0.0002226"
+          izz="0.03"/>
+      </inertial>
+      <visual>
+        <origin xyz="-0.074211 0 -0.031076" rpy="0 0 ${pi/2}"/>
+        <geometry>
+          <mesh filename="package://rapha_description/models/raph_base_link.dae"/>
+        </geometry>
+      </visual>
+      <collision>
+        <origin xyz="0 0 -0.031076" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://rapha_description/models/raph_outline.stl"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <link name="${link_prefix}mounting_plate_frame"/>
+
+    <xacro:servo_link name="l"/>
+    <xacro:servo_link name="r"/>
+
+    <xacro:wheel_link name="fl"/>
+    <xacro:wheel_link name="rl"/>
+    <xacro:wheel_link name="fr"/>
+    <xacro:wheel_link name="rr"/>
+
+    <link name="${link_prefix}imu_frame"/>
+
+    <!-- JOINTS -->
+
+    <xacro:if value="${footprint_link}">
+      <joint name="${joint_prefix}base_joint" type="fixed">
+        <origin xyz="0 0 0.235756" rpy="0 0 0"/>
+        <parent link="${link_prefix}base_footprint"/>
+        <child link="${link_prefix}base_link"/>
+      </joint>
+    </xacro:if>
+
+    <joint name="${joint_prefix}servo_l_joint" type="revolute">
+      <origin xyz="-0.37943 0.1899 -0.022433" rpy="0 0 0"/>
+      <parent link="${link_prefix}base_link"/>
+      <child link="${link_prefix}servo_l_link"/>
+      <axis xyz="0 0 -1"/>
+      <limit effort="100.0" lower="-1.5708" upper="1.5708" velocity="100.0"/>
+    </joint>
+
+    <joint name="${joint_prefix}servo_r_joint" type="revolute">
+      <origin xyz="-0.37943 -0.1899 -0.022433" rpy="0 0 ${pi}"/>
+      <parent link="${link_prefix}base_link"/>
+      <child link="${link_prefix}servo_r_link"/>
+      <axis xyz="0 0 -1"/>
+      <limit effort="100.0" lower="-1.5708" upper="1.5708" velocity="100.0"/>
+    </joint>
+
+    <joint name="${joint_prefix}wheel_fl_joint" type="continuous">
+      <origin xyz="0 0.19402 -0.144756" rpy="0 0 0"/>
+      <parent link="${link_prefix}base_link"/>
+      <child link="${link_prefix}wheel_fl_link"/>
+      <axis xyz="0 1 0"/>
+      <limit effort="2.0" velocity="6.0"/>
+      <dynamics friction="0.5" damping="0.2"/>
+    </joint>
+
+    <joint name="${joint_prefix}wheel_rl_joint" type="continuous">
+      <origin xyz="0 0 -0.12392" rpy="0 0 0"/>
+      <parent link="${link_prefix}servo_l_link"/>
+      <child link="${link_prefix}wheel_rl_link"/>
+      <axis xyz="0 1 0"/>
+      <limit effort="2.0" velocity="6.0"/>
+      <dynamics friction="0.5" damping="0.2"/>
+    </joint>
+
+    <joint name="${joint_prefix}wheel_fr_joint" type="continuous">
+      <origin xyz="0 -0.19402 -0.144756" rpy="0 0 ${pi}"/>
+      <parent link="${link_prefix}base_link"/>
+      <child link="${link_prefix}wheel_fr_link"/>
+      <axis xyz="0 -1 0"/>
+      <limit effort="2.0" velocity="6.0"/>
+      <dynamics friction="0.5" damping="0.2"/>
+    </joint>
+
+    <joint name="${joint_prefix}wheel_rr_joint" type="continuous">
+      <origin xyz="0 0 -0.12392" rpy="0 0 0"/>
+      <parent link="${link_prefix}servo_r_link"/>
+      <child link="${link_prefix}wheel_rr_link"/>
+      <axis xyz="0 -1 0"/>
+      <limit effort="2.0" velocity="6.0"/>
+      <dynamics friction="0.5" damping="0.2"/>
+    </joint>
+
+    <joint name="${joint_prefix}imu_joint" type="fixed">
+      <origin xyz="${imu_translation}" rpy="0 0 0"/>
+      <parent link="${link_prefix}base_link"/>
+      <child link="${link_prefix}imu_frame"/>
+    </joint>
+
+    <joint name="${joint_prefix}mounting_plate_joint" type="fixed">
+      <origin xyz="-0.216822 0 0" rpy="0 0 0"/>
+      <parent link="${link_prefix}base_link"/>
+      <child link="${link_prefix}mounting_plate_frame"/>
+    </joint>
+
+  </xacro:macro>
+
+</robot>

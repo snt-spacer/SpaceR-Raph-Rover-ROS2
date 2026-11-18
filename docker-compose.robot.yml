@@ -1,0 +1,270 @@
+# docker-compose.robot.yml
+#
+# ROVER stack — runs on the Jetson. Everything needed to operate the robot:
+# the Zenoh router, the microcontroller bridge, all sensors, TF/description,
+# odometry and the voxel filter. NO teleop and NO debug_cli — those run on the
+# operator's machine (docker-compose.remote.yml).
+#
+# These containers reach the Zenoh router via the local host network (the router
+# runs here), so they use rmw_zenoh's default localhost session — no
+# ZENOH_SESSION_CONFIG_URI needed.
+#
+#   ./docker_build_robot.sh          # build + up -d
+#   docker compose -f docker-compose.robot.yml up -d
+
+services:
+  # Zenoh router (rmw_zenohd), tuned for large point-cloud fragmentation to
+  # remote peers. Must be up before everything else (depends_on handles it).
+  zenoh_router:
+    image: leo_raph/base:1.0
+    network_mode: host
+    ipc: host
+    restart: unless-stopped
+    environment:
+      RMW_IMPLEMENTATION: rmw_zenoh_cpp
+    volumes:
+      - ./docker/zenoh_router_entrypoint.sh:/zenoh_router_entrypoint.sh:ro
+    entrypoint: ["bash", "/zenoh_router_entrypoint.sh"]
+
+  # micro_ros_agent bridges the microcontroller's XRCE-DDS client onto native
+  # Fast DDS; controller_relay_dds/zenoh then relay it onto Zenoh. See README.
+  micro_ros_agent:
+    build:
+      context: ./component-micro_ros_agent
+      dockerfile: Dockerfile
+    image: leo_raph/micro_ros_agent:dev
+    network_mode: host
+    ipc: host
+    restart: unless-stopped
+    entrypoint: >
+      bash -lc " /entrypoint.sh > /var/log/micro_ros/agent.log 2>&1 & tail -f /dev/null"
+    volumes:
+      - ./logs:/var/log/micro_ros
+    environment:
+      AGENT_PORT: 8888
+      DISCOVERY_PORT: 7400
+      ROS_DOMAIN_ID: 0
+      RMW_IMPLEMENTATION: rmw_fastrtps_cpp
+      VERBOSITY: -v4
+      ROBOT_NAMESPACE: ""
+      LAUNCH_ARGS: ""
+      RCUTILS_COLORIZED_OUTPUT: 1
+
+  # Typed DDS <-> Zenoh relay for the base controller (two rclpy nodes, one per
+  # RMW, linked over TCP loopback). BRIDGE_TOPICS/BRIDGE_SERVICES define what is
+  # bridged and how firmware names are normalised to /controller/*. See README.
+  controller_relay_dds:
+    depends_on:
+      - micro_ros_agent
+    build:
+      context: .
+      dockerfile: component-controller_relay/Dockerfile
+    image: leo_raph/controller_relay:dev
+    network_mode: host
+    ipc: host
+    restart: unless-stopped
+    entrypoint: >
+      bash -lc "/entrypoint.sh"
+    environment:
+      ROS_DOMAIN_ID: 0
+      RMW_IMPLEMENTATION: rmw_fastrtps_cpp
+      BRIDGE_SIDE: dds
+      BRIDGE_SOCKET_ROLE: server
+      BRIDGE_SOCKET_PORT: 9999
+      BRIDGE_TOPICS: "/controller/cmd_ackermann:ackermann_msgs/msg/AckermannDrive:down,/joint_states=/controller/joint_states:sensor_msgs/msg/JointState:up,/controller/imu=/controller/imu/data:sensor_msgs/msg/Imu:up,/controller/odom:nav_msgs/msg/Odometry:up,/controller/cmd_led_panel:rapha_interfaces/msg/LedPanelState:down,/controller/cmd_led_strip:rapha_interfaces/msg/LedStripState:down,/controller/led_strip_state:rapha_interfaces/msg/LedStripState:up"
+      BRIDGE_SERVICES: "/controller/set_steering_mode:rapha_interfaces/srv/SetSteeringMode:down,/controller/calibrate_servos:std_srvs/srv/Trigger:down,/controller/set_leds:rapha_interfaces/srv/SetLeds:down,/controller/clear_leds:std_srvs/srv/Trigger:down"
+
+  controller_relay_zenoh:
+    depends_on:
+      - zenoh_router
+      - controller_relay_dds
+    build:
+      context: .
+      dockerfile: component-controller_relay/Dockerfile
+    image: leo_raph/controller_relay:dev
+    network_mode: host
+    ipc: host
+    restart: unless-stopped
+    entrypoint: >
+      bash -lc "/entrypoint.sh"
+    environment:
+      ROS_DOMAIN_ID: 0
+      RMW_IMPLEMENTATION: rmw_zenoh_cpp
+      ZENOH_ROUTER: tcp/10.10.0.15:7447
+      BRIDGE_SIDE: zenoh
+      BRIDGE_SOCKET_ROLE: client
+      BRIDGE_SOCKET_HOST: 127.0.0.1
+      BRIDGE_SOCKET_PORT: 9999
+      BRIDGE_TOPICS: "/controller/cmd_ackermann:ackermann_msgs/msg/AckermannDrive:down,/joint_states=/controller/joint_states:sensor_msgs/msg/JointState:up,/controller/imu=/controller/imu/data:sensor_msgs/msg/Imu:up,/controller/odom:nav_msgs/msg/Odometry:up,/controller/cmd_led_panel:rapha_interfaces/msg/LedPanelState:down,/controller/cmd_led_strip:rapha_interfaces/msg/LedStripState:down,/controller/led_strip_state:rapha_interfaces/msg/LedStripState:up"
+      BRIDGE_SERVICES: "/controller/set_steering_mode:rapha_interfaces/srv/SetSteeringMode:down,/controller/calibrate_servos:std_srvs/srv/Trigger:down,/controller/set_leds:rapha_interfaces/srv/SetLeds:down,/controller/clear_leds:std_srvs/srv/Trigger:down"
+
+  # robot_state_publisher (URDF -> TF), robot description, rapha_system node.
+  leo_base_system:
+    depends_on:
+      - zenoh_router
+    build:
+      context: ./component-leo_base_system
+      dockerfile: Dockerfile
+    image: leo_raph/leo_base_system:dev
+    network_mode: host
+    ipc: host
+    restart: unless-stopped
+    entrypoint: >
+      bash -lc "/entrypoint.sh"
+    devices:
+      - /dev/input/:/dev/input/
+    volumes:
+      - /run/udev:/run/udev:ro
+    privileged: true
+    environment:
+      ROBOT_NAMESPACE: ""
+      LAUNCH_ARGS: ""
+      RCUTILS_COLORIZED_OUTPUT: 1
+      RMW_IMPLEMENTATION: rmw_zenoh_cpp
+      ZENOH_ROUTER: tcp/10.10.0.15:7447
+      ROS_DOMAIN_ID: 0
+
+  # navcam — Bumblebee X forward stereo (Spinnaker/GigE, jumbo MTU).
+  component-bumblebee-arm64:
+    depends_on:
+      - zenoh_router
+    build:
+      context: ./component-bumblebee_arm64
+      dockerfile: Dockerfile
+    image: leo_raph/component-bumblebee-arm64:dev
+    network_mode: host
+    ipc: host
+    entrypoint: >
+      bash -lc "/entrypoint.sh"
+    privileged: true
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+      - ~/.Xauthority:/root/.Xauthority:ro
+    environment:
+      DISPLAY: $DISPLAY
+      QT_X11_NO_MITSHM: 1
+      XAUTHORITY: /root/.Xauthority
+      CAMERA_SERIAL: "25050218"
+      CAMERA_IP: "10.10.0.17"
+      CAMERA_SUBNET: "255.255.255.0"
+      CAMERA_GATEWAY: "10.10.0.1"
+      GIGE_INTERFACE: "enP8p1s0"   # NIC with 10.10.0.15/24, used for GigE camera
+      CAMERA_FPS: "2.0"
+      CAMERA_RESOLUTION: "Quarter"    # Quarter or Full resolution
+      # Must match the URDF's navcam optical frame.
+      CAMERA_FRAME_ID: "navcam_optical_frame"
+      DEBUG_VIEW: "false"
+      RCUTILS_COLORIZED_OUTPUT: 1
+      RMW_IMPLEMENTATION: rmw_zenoh_cpp
+
+  # loccam — OAK-D Pro W localization camera (depthai).
+  component-oak_camera:
+    build:
+      context: ./component-oak_camera
+      dockerfile: Dockerfile
+    image: leo_raph/component-oak_camera:dev
+    network_mode: host
+    ipc: host
+    privileged: true
+    restart: unless-stopped
+    entrypoint: >
+      bash -lc "/entrypoint.sh"
+    volumes:
+      - /dev/bus/usb:/dev/bus/usb
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+      - ~/.Xauthority:/root/.Xauthority:ro
+    environment:
+      DISPLAY: $DISPLAY
+      QT_X11_NO_MITSHM: 1
+      XAUTHORITY: /root/.Xauthority
+      ROBOT_NAMESPACE: ""
+      LAUNCH_ARGS: ""
+      RCUTILS_COLORIZED_OUTPUT: 1
+      ROS_DOMAIN_ID: 0
+      RMW_IMPLEMENTATION: rmw_zenoh_cpp
+      ZENOH_ROUTER: tcp/10.10.0.15:7447
+
+  # lidar — Livox HAP.
+  component-livox_lidar:
+    depends_on:
+      - zenoh_router
+    build:
+      context: ./component-livox_lidar
+      dockerfile: Dockerfile
+    image: leo_raph/component-livox_lidar:dev
+    network_mode: host
+    ipc: host
+    privileged: true
+    restart: unless-stopped
+    entrypoint: >
+      bash -lc "/entrypoint.sh"
+    environment:
+      RMW_IMPLEMENTATION: rmw_zenoh_cpp
+      RCUTILS_COLORIZED_OUTPUT: 1
+
+  # External WIT WT901C IMU -> /imu_wit/*.
+  component-wit_imu:
+    depends_on:
+      - zenoh_router
+    build:
+      context: ./component-wit_imu
+      dockerfile: Dockerfile
+    image: leo_raph/component-wit_imu:dev
+    network_mode: host
+    ipc: host
+    restart: unless-stopped
+    entrypoint: >
+      bash -lc "/entrypoint.sh"
+    devices:
+      - /dev/input/:/dev/input/
+    volumes:
+      - /run/udev:/run/udev
+      - /dev/bus/usb:/dev/bus/usb
+    privileged: true
+    environment:
+      ROBOT_NAMESPACE: ""
+      LAUNCH_ARGS: ""
+      RCUTILS_COLORIZED_OUTPUT: 1
+      ROS_DOMAIN_ID: 0
+      RMW_IMPLEMENTATION: rmw_zenoh_cpp
+      ZENOH_ROUTER: tcp/10.10.0.15:7447
+      RCUTILS_LOGGING_USE_STDOUT: 1
+
+  # Wheel (Ackermann) odometry: /controller/joint_states -> /odom (+ TF).
+  component-odometry:
+    depends_on:
+      - zenoh_router
+    build:
+      context: ./component-odometry
+      dockerfile: Dockerfile
+    image: leo_raph/component-odometry:dev
+    network_mode: host
+    ipc: host
+    restart: unless-stopped
+    entrypoint: >
+      bash -lc "/entrypoint.sh"
+    environment:
+      RMW_IMPLEMENTATION: rmw_zenoh_cpp
+      ZENOH_ROUTER: tcp/10.10.0.15:7447
+      ROS_DOMAIN_ID: 0
+      RCUTILS_COLORIZED_OUTPUT: 1
+
+  # Voxel-grid downsample of every cloud -> *_filtered. Live-tunable:
+  #   ros2 param set /voxel_filter leaf_size <metres>
+  component-voxel-filter:
+    depends_on:
+      - zenoh_router
+    build:
+      context: ./component-voxel-filter
+      dockerfile: Dockerfile
+    image: leo_raph/component-voxel-filter:dev
+    network_mode: host
+    ipc: host
+    restart: unless-stopped
+    entrypoint: >
+      bash -lc "/entrypoint.sh"
+    environment:
+      RMW_IMPLEMENTATION: rmw_zenoh_cpp
+      ZENOH_ROUTER: tcp/10.10.0.15:7447
+      ROS_DOMAIN_ID: 0
+      RCUTILS_COLORIZED_OUTPUT: 1

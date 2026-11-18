@@ -1,0 +1,40 @@
+/loccam:
+  ros__parameters:
+    camera:
+      # USB2: the OAK re-enumerates as USB3 after boot, and the new device node
+      # does not reach the container. USB2 is enough at these frame rates.
+      i_usb_speed: "HIGH"
+      # IR dot projector off (mA, 0-1200). Set 800-1200 for better depth on
+      # low-texture surfaces.
+      i_laser_dot_brightness: 0
+      i_floodlight_brightness: 0
+    device:
+      mx_id: ""
+      usb_port_id: ""
+    depth:
+      confidence_threshold: 110
+      lr_check_enabled: true
+      lr_check_threshold: 5
+      subpixel_enabled: true
+      subpixel_fractional_bits: 3
+      min_distance: 0.0
+      max_distance: 10.0
+    # Frame rate per sensor. 2 fps keeps the ~30 MB /loccam/points cloud light,
+    # and is about the RGB sensor's minimum; throttle the topic for lower rates.
+    rgb:
+      i_fps: 2.0
+    left:
+      i_fps: 2.0
+    right:
+      i_fps: 2.0
+    stereo:
+      i_fps: 2.0
+      # Mono pair rectified on the device: /loccam/{left,right}/image_rect.
+      i_left_rect_publish_topic: true
+      i_right_rect_publish_topic: true
+      # Left and right published with the same stamp, for stereo/VIO.
+      i_publish_synced_rect_pair: true
+    mono_compressed:
+      jpeg_quality: 80
+    rgb_compressed:
+      jpeg_quality: 80

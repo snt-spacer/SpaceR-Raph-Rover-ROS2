@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>bumblebee_publisher</name>
+  <version>0.1.0</version>
+  <description>ROS 2 node for FLIR Bumblebee X stereo camera using Spinnaker C++ API</description>
+  <maintainer email="raul.castilla@uni.lu">Raúl Castilla Arquillo</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>sensor_msgs</depend>
+  <depend>image_transport</depend>
+
+  <!-- Runtime transport plugins so /compressed, /compressedDepth, /theora and
+       /zstd variants are advertised for every published image topic. -->
+  <exec_depend>compressed_image_transport</exec_depend>
+  <exec_depend>compressed_depth_image_transport</exec_depend>
+  <exec_depend>theora_image_transport</exec_depend>
+  <exec_depend>zstd_image_transport</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
